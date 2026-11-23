@@ -28,24 +28,9 @@ test <- d[181:192, ]
 
 ## Question 1
 
-
-
 ### (a)
 
 ```{r, include=TRUE}
-plot(lags, ARMAacf(ar = 0.7, lag.max = 6), type = "h", ylim = c(-1, 1), main = "AR(1): phi = 0.7", xlab = "Lag", ylab = "ACF")
-abline(h = 0)
 
-plot(lags, ARMAacf(ar = -0.7, lag.max = 6), type = "h", ylim = c(-1, 1), main = "AR(1): phi = -0.7", xlab = "Lag", ylab = "ACF")
-abline(h = 0)
 ```
 
-### (b)
-
-```{r, include=TRUE}
-plot(lags, ARMAacf(ma = 0.7, lag.max = 6), type = "h", ylim = c(-1, 1), main = "MA(1): theta = 0.7", xlab = "Lag", ylab = "ACF")
-abline(h = 0)
-
-plot(lags, ARMAacf(ma = -0.7, lag.max = 6), type = "h", ylim = c(-1, 1), main = "MA(1): theta = -0.7", xlab = "Lag", ylab = "ACF")
-abline(h = 0)
-```
