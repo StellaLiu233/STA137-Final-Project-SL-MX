@@ -1,6 +1,6 @@
 ---
 title: "STA137 Final Project"
-author: "Stella Liu, ID: 922136324; Margaret Xi, ID:"
+author: "Stella Liu, ID: 922136324; Margaret Xi, ID: 921845849"
 date: "2026-11-23"
 output: pdf_document
 ---
