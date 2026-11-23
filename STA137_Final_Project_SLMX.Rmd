@@ -1,0 +1,51 @@
+---
+title: "STA137 Final Project"
+author: "Stella Liu, ID: 922136324; Margaret Xi, ID:"
+date: "2026-11-23"
+output: pdf_document
+---
+
+```{r setup, include=FALSE} 
+alldata <- read.csv("STAT137_Gun_Sales_2000_2015.csv")
+head(alldata)
+str(alldata)
+```
+
+```{r, include=TRUE}
+sum(is.na(alldata)) 
+national <- subset(alldata, state == "Totals")
+national <- national[order(national$year,
+national$month.num), ]
+national$sales <- 1.1 * (national$handgun + national$longgun) +
+2 * national$multiple_corrected
+Y <- ts(national$sales, start = c(2000, 1), frequency = 12)
+# Training-only regression data (for questions below)
+d <- data.frame(y = as.numeric(Y), t = 1:192,
+month = factor(rep(1:12, 16)))
+train <- d[1:180, ]
+test <- d[181:192, ]
+```
+
+## Question 1
+
+
+
+### (a)
+
+```{r, include=TRUE}
+plot(lags, ARMAacf(ar = 0.7, lag.max = 6), type = "h", ylim = c(-1, 1), main = "AR(1): phi = 0.7", xlab = "Lag", ylab = "ACF")
+abline(h = 0)
+
+plot(lags, ARMAacf(ar = -0.7, lag.max = 6), type = "h", ylim = c(-1, 1), main = "AR(1): phi = -0.7", xlab = "Lag", ylab = "ACF")
+abline(h = 0)
+```
+
+### (b)
+
+```{r, include=TRUE}
+plot(lags, ARMAacf(ma = 0.7, lag.max = 6), type = "h", ylim = c(-1, 1), main = "MA(1): theta = 0.7", xlab = "Lag", ylab = "ACF")
+abline(h = 0)
+
+plot(lags, ARMAacf(ma = -0.7, lag.max = 6), type = "h", ylim = c(-1, 1), main = "MA(1): theta = -0.7", xlab = "Lag", ylab = "ACF")
+abline(h = 0)
+```
