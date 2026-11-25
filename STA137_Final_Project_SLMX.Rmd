@@ -5,32 +5,175 @@ date: "2026-11-23"
 output: pdf_document
 ---
 
-```{r setup, include=FALSE} 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 alldata <- read.csv("STAT137_Gun_Sales_2000_2015.csv")
-head(alldata)
-str(alldata)
 ```
 
-```{r, include=TRUE}
+## Question 1
+
+```{r, include=FALSE}
+head(alldata)
+dim(alldata)
+str(alldata)
+
 sum(is.na(alldata)) 
+
+table(alldata$state)
+
 national <- subset(alldata, state == "Totals")
 national <- national[order(national$year,
 national$month.num), ]
 national$sales <- 1.1 * (national$handgun + national$longgun) +
 2 * national$multiple_corrected
+
 Y <- ts(national$sales, start = c(2000, 1), frequency = 12)
+```
+
+## Question 2
+
+```{r}
+plot(Y, type = "l", col = "steelblue", lwd = 1.5,
+     xlab = "Year", ylab = "Estimated sales (firearms per month)",
+     main = "Estimated U.S. monthly firearm sales, 2000-2015")
+abline(v = 2015, lty = 2, col = "red") 
+text(2015, max(Y), "Test (2015)", pos = 2, col = "red", cex = 0.8)
+
+top <- order(national$sales, decreasing = TRUE)[1:4]
+points(time(Y)[top], Y[top], col = "red", pch = 19)
+```
+
+## Question 3
+
+```{r, include=FALSE}
 # Training-only regression data (for questions below)
 d <- data.frame(y = as.numeric(Y), t = 1:192,
 month = factor(rep(1:12, 16)))
 train <- d[1:180, ]
 test <- d[181:192, ]
+
+# Table of average sales by calendar month
+month_tab <- aggregate(y ~ month, data = train,
+                       FUN = function(x) c(mean = mean(x), median = median(x)))
+print(month_tab)
 ```
 
-## Question 1
-
-### (a)
-
-```{r, include=TRUE}
-
+```{r}
+# Boxplot by month
+boxplot(y ~ month, data = train, names = month.abb,
+        xlab = "Calendar month", ylab = "Estimated sales (firearms per month)",
+        main = "Estimated sales by calendar month, 2000-2014", col = "lightblue")
 ```
 
+## Question 4
+
+```{r, include=FALSE}
+fit <- lm(y ~ t + month, data = train)
+summary(fit)
+```
+
+```{r}
+train$res <- resid(fit)
+plot(1:180, train$res, type = "l", col = "steelblue",
+     xlab = "Month index t (1 = Jan 2000, 180 = Dec 2014)",
+     ylab = "Residual (firearms per month)",
+     main = "Residuals from trend + month regression")
+abline(h = 0, lty = 2)
+```
+
+## Question 5
+
+```{r}
+res <- train$res
+
+par(mfrow = c(1, 2))
+acf(res,  lag.max = 36, main = "Sample ACF of residuals",
+    xlab = "Lag (months)", ylab = "Autocorrelation")
+pacf(res, lag.max = 36, main = "Sample PACF of residuals",
+     xlab = "Lag (months)", ylab = "Partial autocorrelation")
+par(mfrow = c(1, 1))
+```
+
+## Question 6
+
+```{r, include=FALSE}
+m_ar   <- arima(res, order = c(2, 0, 0))   # AR(2)
+m_ma   <- arima(res, order = c(0, 0, 4))   # MA(4)
+m_arma <- arima(res, order = c(1, 0, 1))   # ARMA(1,1)
+
+m_ar; m_ma; m_arma  # coefficients, sigma^2, aic
+c(AR2 = AIC(m_ar), MA4 = AIC(m_ma), ARMA11 = AIC(m_arma))
+```
+
+## Question 7
+
+```{r, include=FALSE}
+p_q <- c(AR2 = 2, MA4 = 4, ARMA11 = 2)
+mods <- list(AR2 = m_ar, MA4 = m_ma, ARMA11 = m_arma)
+```
+
+```{r}
+for (nm in names(mods)) {
+  r <- resid(mods[[nm]])
+  acf(r, lag.max = 36, main = paste("Residual ACF:", nm),
+      xlab = "Lag (months)", ylab = "Autocorrelation")
+  print(nm)
+  print(Box.test(r, lag = 24, type = "Ljung-Box", fitdf = p_q[nm]))
+}
+```
+
+## Question 8
+
+```{r, include=FALSE}
+# Deterministic part + ARMA part
+det_fc  <- predict(fit, newdata = test)       # trend + season
+arma_fc <- predict(m_arma, n.ahead = 12)$pred # residual forecast
+fc      <- as.numeric(det_fc) + as.numeric(arma_fc)
+
+# Benchmark: same month of 2014
+naive   <- d$y[169:180]
+actual  <- test$y
+
+mae  <- function(a, p) mean(abs(a - p))
+rmse <- function(a, p) sqrt(mean((a - p)^2))
+data.frame(method = c("Regression + ARMA(1,1)", "Same month 2014"),
+           MAE  = c(mae(actual, fc),  mae(actual, naive)),
+           RMSE = c(rmse(actual, fc), rmse(actual, naive)))
+```
+
+```{r}
+plot(1:12, actual, type = "b", pch = 16, ylim = range(actual, fc, naive),
+     xaxt = "n", xlab = "Month of 2015",
+     ylab = "Estimated sales (firearms per month)",
+     main = "2015: actual vs forecasts")
+axis(1, at = 1:12, labels = month.abb)
+lines(1:12, fc,    type = "b", pch = 17, col = "red")
+lines(1:12, naive, type = "b", pch = 15, col = "blue", lty = 2)
+legend("topleft", c("Actual", "Regression + ARMA(1,1)", "Same month 2014"),
+       col = c("black", "red", "blue"), pch = c(16, 17, 15), lty = c(1, 1, 2))
+```
+
+## Question 9
+
+```{r, include=FALSE}
+md <- subset(alldata, state == "Maryland")
+md <- md[order(md$year, md$month.num), ]
+md$sales <- 1.1 * (md$handgun + md$longgun) + 2 * md$multiple_corrected
+MD <- ts(md$sales, start = c(2000, 1), frequency = 12)
+```
+
+```{r}
+mdw <- window(MD, start = c(2012, 1), end = c(2014, 12))
+plot(mdw, type = "b", pch = 16, col = "darkgreen",
+     xlab = "Year", ylab = "Maryland estimated sales (firearms per month)",
+     main = "Maryland estimated sales, 2012-2014")
+abline(v = 2013 + 4/12, lty = 2, col = "red")
+```
+
+## Question 10
+
+
+## Appendix: R Code
+
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+```
