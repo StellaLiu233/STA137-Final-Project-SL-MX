@@ -1,9 +1,10 @@
 ---
 title: "STA137 Final Project"
 author: "Stella Liu, ID: 922136324; Margaret Xi, ID: 921845849"
-date: "2026-11-23"
+date: "2026-12-04"
 output: pdf_document
 ---
+
 ``````{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
                       fig.width = 6.5, fig.height = 3, fig.align = "center",
@@ -49,6 +50,10 @@ top <- order(national$sales, decreasing = TRUE)[1:4]
 points(time(Y)[top], Y[top], col = "red", pch = 19)
 ```
 
+```{r, include=FALSE}
+data.frame(year = national$year[top], month = national$month.num[top], sales = national$sales[top])
+```
+
 ## Question 3
 
 ```{r, include=FALSE}
@@ -57,14 +62,14 @@ d <- data.frame(y = as.numeric(Y), t = 1:192,
 month = factor(rep(1:12, 16)))
 train <- d[1:180, ]
 test <- d[181:192, ]
+```
 
+```{r, fig.height=3}
 # Table of average sales by calendar month
 month_tab <- aggregate(y ~ month, data = train,
                        FUN = function(x) c(mean = mean(x), median = median(x)))
 print(month_tab)
-```
 
-```{r, fig.height=3}
 # Boxplot by month
 boxplot(y ~ month, data = train, names = month.abb,
         xlab = "Calendar month", ylab = "Estimated sales (firearms per month)",
@@ -76,13 +81,14 @@ boxplot(y ~ month, data = train, names = month.abb,
 ```{r, include=FALSE}
 fit <- lm(y ~ t + month, data = train)
 summary(fit)
+coef(fit)[c("t", "month12")]
 ```
 
 ```{r, fig.height=2.8}
 train$res <- resid(fit)
 plot(1:180, train$res, type = "l", col = "steelblue",
      xlab = "Month index t (1 = Jan 2000, 180 = Dec 2014)",
-     ylab = "Residual (firearms per month)",
+     ylab = "Residual (firearms per month)", 
      main = "Residuals from trend + month regression")
 abline(h = 0, lty = 2)
 ```
@@ -100,6 +106,13 @@ pacf(res, lag.max = 36, main = "Sample PACF of residuals",
 par(mfrow = c(1, 1))
 ```
 
+```{r, include=FALSE}
+c(first = sd(res[1:90]), second = sd(res[91:180]))
+data.frame(lag = c(1,2,3,12,24),
+           ACF = acf(res, plot = FALSE, lag.max = 24)$acf[c(2,3,4,13,25)],
+           PACF = pacf(res, plot = FALSE, lag.max = 24)$acf[c(1,2,3,12,24)])
+```
+
 ## Question 6
 
 ```{r, include=FALSE}
@@ -109,13 +122,18 @@ m_arma <- arima(res, order = c(1, 0, 1))   # ARMA(1,1)
 
 m_ar; m_ma; m_arma  # coefficients, sigma^2, aic
 c(AR2 = AIC(m_ar), MA4 = AIC(m_ma), ARMA11 = AIC(m_arma))
+
+mods <- list(AR2 = m_ar, MA4 = m_ma, ARMA11 = m_arma)
+```
+
+```{r}
+knitr::kable(data.frame(Model = names(mods), sigma2 = sapply(mods, function(m) m$sigma2), AIC = sapply(mods, AIC)))
 ```
 
 ## Question 7
 
 ```{r, include=FALSE}
 p_q <- c(AR2 = 2, MA4 = 4, ARMA11 = 2)
-mods <- list(AR2 = m_ar, MA4 = m_ma, ARMA11 = m_arma)
 ```
 
 ````{r, fig.height=2.6}
@@ -132,6 +150,13 @@ for (nm in names(mods)) {
   print(nm)
   print(Box.test(resid(mods[[nm]]), lag = 24, type = "Ljung-Box", fitdf = p_q[nm]))
 }
+```
+
+```{r, include=FALSE}
+lb <- sapply(names(mods), function(nm) Box.test(resid(mods[[nm]]), lag = 24, type = "Ljung-Box", fitdf = p_q[nm])$p.value)
+aic <- sapply(mods, AIC)
+best_nm <- names(which.min(aic[lb >= 0.05]))
+best_nm
 ```
 
 ## Question 8
@@ -151,6 +176,15 @@ rmse <- function(a, p) sqrt(mean((a - p)^2))
 data.frame(method = c("Regression + ARMA(1,1)", "Same month 2014"),
            MAE  = c(mae(actual, fc),  mae(actual, naive)),
            RMSE = c(rmse(actual, fc), rmse(actual, naive)))
+```
+
+```{r}
+knitr::kable(data.frame(Month = month.abb, Actual = round(actual), Model = round(fc), Benchmark = round(naive)))
+```
+
+```{r, include=FALSE}
+sum(abs(actual - naive) < abs(actual - fc))
+100 * (1 - mae(actual, naive) / mae(actual, fc))
 ```
 
 ```{r, fig.height=3.2}
@@ -179,7 +213,8 @@ mdw <- window(MD, start = c(2012, 1), end = c(2014, 12))
 plot(mdw, type = "b", pch = 16, col = "darkgreen",
      xlab = "Year", ylab = "Maryland estimated sales (firearms per month)",
      main = "Maryland estimated sales, 2012-2014")
-abline(v = 2013 + 4/12, lty = 2, col = "red")
+abline(v = 2013 + 9/12, lty = 2, col = "blue")
+legend("topleft", c("May 2013 approval", "Oct 2013 deadline"), lty = 2, col = c("red", "blue"), cex = 0.7)
 ```
 
 ## Question 10
