@@ -1,7 +1,10 @@
 ---
-output:
-  pdf_document:
-    latex_engine: xelatex
+title: "Forecasting estimated U.S. gun sales"
+subtitle: "STA137 Final Project"
+author: "Stella Liu, ID: 922136324; Margaret Xi, ID: 921845849"
+date: "2026-12-04"
+output: pdf_document
+
 fontsize: 10pt
 geometry: margin=0.76in
 header-includes:
@@ -9,9 +12,9 @@ header-includes:
   - \usepackage{xcolor}
   - \definecolor{ink}{HTML}{175864}
   - \usepackage{fancyhdr}
-  - \pagestyle{fancy} 
+  - \pagestyle{fancy}
   - \fancyhf{}
-  - \fancyhead[L]{\small STAT 137 \quad Applied Time Series Analysis}
+  - \fancyhead[L]{\small STA 137}
   - \fancyhead[R]{\small Fall 2026}
   - \fancyfoot[C]{\small\thepage}
   - \setlength{\headheight}{14pt}
@@ -44,36 +47,31 @@ stopifnot(nrow(train) == 180, nrow(test) == 12)
 teal <- "#146475"
 rust <- "#A6472A"
 dark <- "#27333C"
-style <- function() par(mfrow=c(1,1), mar=c(3.2,4.3,1.1,.8), mgp=c(2.1,.65,0),
+style <- function() par(mfrow=c(1,1), mar=c(3.5,5.1,2.5,.9), cex.main=.92, mgp=c(2.1,.65,0),
                         las=1, bty="l", cex.axis=.86, col.axis=dark)
 fmt <- function(x, digits=0) formatC(x, format="f", digits=digits, big.mark=",")
 tableout <- function(x) knitr::kable(x, format="latex", booktabs=TRUE, row.names=FALSE)
 ```
 
-```{=latex}
-\begingroup
-\LARGE\bfseries\color{ink} Forecasting estimated U.S. gun sales\par
-\endgroup
-```
-
-\smallskip
-
-**Monthly background-check data, January 2000–December 2015**
-
 ## 1. Data and measurement
 
-The CSV contains **`r shape[1]` rows, `r shape[2]` original variables, and `r missing` missing values**. Each row represents one geographic series in one calendar month. Each series has 192 consecutive months with no duplicates. The national series, `Totals`, already includes Missouri, Maryland, and New Jersey. Only the national rows enter Questions 2–8.
+Sales, fitted values, residuals, innovations, and forecast errors all use estimated firearms per month unless a figure or table specifies a scale of thousands or millions. Correlations, standardized statistics, p-values, and AIC differences are unitless. Variances are in squared units of the monthly response.
 
-Estimated monthly sales are $Y_t=1.1(H_t+L_t)+2M_t^*$, where $H_t$ is `handgun`, $L_t$ is `longgun`, and $M_t^*$ is `multiple_corrected`. The correction excludes inconsistent California multiple-check data from the national calculation. The handgun and long-gun columns count category-specific FBI NICS checks. The corrected multiple-firearm column counts checks involving more than one firearm. The formula assigns 1.1 estimated firearms to each handgun or long-gun check and two to each corrected multiple check. Permit checks and other check categories are excluded. The weights approximate firearms per check, and some private transfers generate no check in the data (Aisch and Keller, 2016).
+**Observational unit.** Each row contains background-check counts for one geographic area in one calendar month. For example, the Maryland row for January 2000 summarizes that state's activity for the entire month. The four geographic series each contain 192 consecutive months, giving **`r shape[1]` rows, `r shape[2]` original variables, and `r missing` missing values**. The date checks also confirm one row per area per month.
 
-For January 2000, the national row gives $1.1(185{,}677+322{,}777)+2(7{,}826)=574{,}951.4$ estimated firearms. The decimal reflects the weighting rule. Adding the state rows to this total would count those states twice. I sorted by year and month before splitting the national series so each lag represents the correct number of months. The first 180 months determine every fitted coefficient and model choice. The final 12 months measure forecast accuracy.
+**Meaning of Totals.** A row labeled `Totals` gives the U.S. aggregate for that month. It includes activity from Missouri, Maryland, New Jersey, and the rest of the country. Adding the three state rows to the national row would count those states twice. Questions 2–8 use the 192 national rows.
+
+**Why $Y_t$ is an estimate.** The response is $Y_t=1.1(H_t+L_t)+2M_t^*$, where $H_t$ and $L_t$ count handgun and long-gun checks, and $M_t^*$ counts corrected multiple-firearm checks. Two features limit accuracy. First, the weights assign an assumed number of firearms to each check. The CSV contains no transaction-level count of firearms actually purchased. Second, some private sales generate no check in these data. The calculation excludes permit checks and omits inconsistent California multiple-check data from the national multiple-firearm category (Aisch and Keller, 2016).
+
+For January 2000, the national row gives $1.1(185{,}677+322{,}777)+2(7{,}826)=574{,}951.4$ estimated firearms. The fractional result comes from the conversion rule. After sorting the national rows chronologically, I use January 2000–December 2014 for fitting and model selection (180 months) and January–December 2015 for forecast evaluation (12 months).
 
 ## 2. The national series
 
 ```{r national}
 style()
 plot(d$date, d$y/1e6, type="l", col=teal, lwd=1.4, xlab="Year",
-     ylab="Estimated sales (millions)")
+     ylab="Sales (million firearms/month)",
+     main="Estimated monthly U.S. firearm sales, 2000-2015")
 abline(v=as.Date("2015-01-01"), lty=3, col=dark)
 ```
 
@@ -81,11 +79,11 @@ Mean monthly sales rose from `r fmt(mean(d$y[d$year==2000]))` in 2000 to `r fmt(
 
 The increase was uneven. Average monthly sales were about 588,000 in 2003, reached 1.28 million in 2013, and fell in 2014. Even within a single year, the series generally rises from summer into late fall. Fitting one constant mean to the raw data would therefore mix two different sources of apparent persistence. Adjacent months share a long-run level, and observations twelve months apart share a calendar position. I estimate those systematic differences first so that the ARMA coefficients describe what remains.
 
-\newpage
+A plain ARMA model is a poor fit because the mean changes over time (trend), the level repeats every year (seasonality), and the variance grows as sales rise. That breaks stationarity.
 
 ## 3. The annual sales pattern
 
-Mean monthly estimated sales in **thousands**, January 2000–December 2014 (15 observations per month):
+Mean monthly estimated sales in **thousands of firearms per month**, January 2000–December 2014 (15 observations per month):
 
 ```{r monthly, results='asis'}
 means <- tapply(train$y, train$month, mean)
@@ -97,7 +95,8 @@ tableout(tab)
 ```{r seasonal-spread, fig.height=3.0}
 style()
 boxplot(I(y/1e6) ~ month, data=train, names=month.abb,
-        xlab="Calendar month", ylab="Estimated sales (millions)",
+        xlab="Calendar month", ylab="Sales (million firearms/month)",
+        main="U.S. sales by calendar month, 2000-2014",
         col="#D8EBED", border=dark, outline=TRUE)
 points(12, train$y[train$date==as.Date("2012-12-01")]/1e6,
        pch=1, cex=1.65, lwd=1.8, col=rust)
@@ -105,9 +104,11 @@ points(12, train$y[train$date==as.Date("2012-12-01")]/1e6,
 
 The line in each box marks the median of that month's 15 training observations. The box spans the middle half of the values. The red ring marks December 2012. Comparing medians checks whether the seasonal contrast persists when an extreme observation has little influence. The December median is `r fmt(median(train$y[train$month.num==12]))` firearms, compared with `r fmt(median(train$y[train$month.num==6]))` in June. These summaries mix early and late years. Question 4 estimates the calendar effect while also accounting for the time trend.
 
-December had the highest average and was the annual maximum in `r sum(tapply(train$y,train$year,which.max)==12)` of 15 years. November was next highest. June and July were nearly tied at the bottom. Recurrence across years identifies seasonality. December 2012 also exceeded the typical training December by `r fmt((d$y[d$date=="2012-12-01"]-means[12])/1e6,2)` million, illustrating how an exceptional month can coincide with a seasonal peak.
+December had the highest average and was the annual maximum in `r sum(tapply(train$y,train$year,which.max)==12)` of 15 years. November was next highest. June and July were nearly tied at the bottom. Recurrence across years identifies seasonality. A seasonal effect repeats every year at the same time. December 2012 also exceeded the typical training December by `r fmt((d$y[d$date=="2012-12-01"]-means[12])/1e6,2)` million, illustrating how an exceptional month can coincide with a seasonal peak.
 
-The table averages each January with other Januaries and likewise for each month, giving every training year equal weight. December averaged about 660,000 more estimated firearms than June. The 13 annual maxima matter because one large December can raise the December average, whereas it can change the identity of the highest month in only one year. For the exceptional observation, the relevant comparison is December 2012 against other Decembers. Comparing it only with summer would mix the unusual increase with the ordinary winter rise.
+Excluding the exceptional December 2012 observation, the other 14 training Decembers still averaged `r fmt(mean(train$y[train$month.num==12 & train$year!=2012]))` firearms per month. That comparison shows why both conclusions can hold. December is usually high, and December 2012 was unusually high even for December.
+
+Means are above medians in most months because the spikes pull the means up. Say that this is why the boxplot shows high outliers.
 
 \newpage
 
@@ -115,32 +116,24 @@ The table averages each January with other Januaries and likewise for each month
 
 ```{r decomposition, include=FALSE}
 linear <- lm(y ~ t + month, data=train)
-# Center in years to improve numerical conditioning of the quadratic.
-train$u <- (train$t - mean(train$t))/12
-test$u <- (test$t - mean(train$t))/12
-trend <- lm(y ~ u + I(u^2) + month, data=train)
-r <- as.numeric(resid(trend))
-# Bartlett/Newey-West covariance with 12 monthly lags and n/(n-k) adjustment.
-wald <- function(model, terms) {
-  X <- model.matrix(model)
-  scores <- X * as.numeric(resid(model))
-  n <- nrow(X)
-  S <- crossprod(scores)
-  for (h in 1:12) {
-    G <- crossprod(scores[(h+1):n,,drop=FALSE], scores[1:(n-h),,drop=FALSE])
-    S <- S + (1-h/13) * (G+t(G))
-  }
-  B <- solve(crossprod(X))
-  V <- n/(n-ncol(X)) * B %*% S %*% B
-  j <- match(terms, colnames(X))
-  b <- coef(model)[j]
-  W <- drop(crossprod(b, solve(V[j,j,drop=FALSE], b)))
-  c(W=W, p=pchisq(W,length(j),lower.tail=FALSE))
+r <- as.numeric(resid(linear))
+# Lecture 9 diagnostics on the chronological linear-model training residuals.
+diagnose <- function(y) {
+  n <- length(y)
+  stopifnot(!anyDuplicated(y))
+  pairs <- sum(vapply(2:n, function(i) sum(y[i] > y[seq_len(i-1)]), integer(1)))
+  mu <- n*(n-1)/4
+  sd.pairs <- sqrt(n*(n-1)*(2*n+5)/72)
+  z.rank <- (pairs-mu)/sd.pairs
+  rho <- as.numeric(acf(y, lag.max=24, plot=FALSE)$acf)[-1]
+  lags <- c(1,12,24)
+  z <- sqrt(n)*rho[lags]
+  Q <- n*sum(rho^2)
+  list(pairs=pairs, z.rank=z.rank, p.rank=2*pnorm(-abs(z.rank)),
+       rho=rho[lags], z=z, p.lag=2*pnorm(-abs(z)),
+       Q=Q, p.Q=pchisq(Q,df=24,lower.tail=FALSE))
 }
-curve <- wald(trend,"I(u^2)")
-train$cs <- cos(2*pi*train$month.num/12)
-train$sn <- sin(2*pi*train$month.num/12)
-season <- wald(update(trend, . ~ . + u:cs + u:sn), c("u:cs","u:sn"))
+checks <- lapply(list(Linear=r), diagnose)
 ```
 
 On the 180 training months, the required least-squares model is
@@ -149,37 +142,58 @@ with $t=1$ in January 2000. Holding the month effect fixed, the fitted baseline 
 
 ```{r residual-comparison, fig.height=3.25}
 style()
-par(mfrow=c(2,1), mar=c(2.75,4.3,1.3,.8), mgp=c(1.85,.55,0))
-for (item in list(list(linear,"Linear trend and month effects"),
-                  list(trend,"Quadratic trend and month effects"))) {
-  plot(train$date, resid(item[[1]])/1000, type="l", lwd=1.1, col=teal,
-       ylim=c(-300,950), ylab="Residual (000s)", xlab="Year", main=item[[2]], cex.main=.95)
-  abline(h=0,col="gray55",lty=2)
-}
+plot(train$date, r/1000, type="l", lwd=1.2, col=teal,
+     main="U.S. sales residuals after linear trend and month adjustment",
+     xlab="Calendar year", ylab="Residual (1,000 firearms/month)")
+abline(h=0, col="gray55", lty=2)
 ```
 
 A residual is observed sales minus the fitted value for that month. A positive run means the baseline repeatedly underestimates sales. A well-chosen baseline can still leave an isolated spike, but a multi-year sequence of errors in the same direction suggests the assumed trend shape needs attention.
 
-The linear fit leaves positive residuals early, mostly negative annual averages from 2003–2011, and a large positive cluster around 2013. To test for remaining curvature, let $u=(t-90.5)/12$ and add $u^2$. The null is a zero quadratic coefficient versus a nonzero coefficient. A Wald test gives $W=`r fmt(curve[1],2)`$ (1 df), $p=`r fmt(curve[2],5)`$. Both tests here use approximate chi-square reference distributions and a 12-lag Bartlett covariance estimate to allow serial correlation and unequal variance.
+The mean residual was positive in each of 2000–2002 and negative in every year from 2003 through 2011. The straight line captures the broad increase, but its constant slope leaves multi-year runs of overprediction and underprediction. The training root mean squared residual is `r fmt(sqrt(mean(r^2)))` estimated firearms per month. I carry these deviations from the required linear baseline forward to Questions 5–8.
 
-I retained the quadratic for Questions 5–8. Its January baseline is $706{,}962+44{,}018u+4{,}564u^2$, with separate month offsets. It reduces the broad curvature, although the late-2012 spike remains. Each calendar month's average training residual is zero by least squares, so retesting the same fixed month effects would be circular.
+**How I chose the diagnostics.** Lecture 9 (*Assessing the Residuals*, §1.5) distinguishes three questions. The rank test looks for systematic movement over time. The sample ACF tests ask whether residuals recur at specific monthly lags. The Box–Pierce test asks whether correlation remains anywhere in a range of lags. I apply each to the 180 training residuals of the linear fit, using $\alpha=0.05$. Positive and negative departures both matter for the first two tests. The joint test accumulates squared departures, so only a large positive statistic counts against its null.
 
-As a check on the size of the improvement, the root mean squared training residual falls from `r fmt(sqrt(mean(resid(linear)^2)))` to `r fmt(sqrt(mean(r^2)))` estimated firearms. Adding a term always weakly improves least-squares fit. The reason to keep this one is that a single curvature term addresses the multi-year pattern visible in the upper panel and the uncertainty-adjusted test supports it. Centering $t$ in years places $u=0$ near the middle of the training record, so the quadratic describes curvature around an observed period. Extrapolating assumes this same curvature continues into 2015.
+**1. Remaining trend: rank test.** Under $H_0$, residuals are iid from a continuous distribution, so a later residual is equally likely to exceed or fall below an earlier one. The targeted alternative is a systematic upward or downward tendency. In chronological order I count $\Pi=\sum_{i>j}I(r_i>r_j)$. Among 16,110 pairs the null expectation is $\mu=n(n-1)/4=8{,}055$. Its null standard deviation is $s=\sqrt{n(n-1)(2n+5)/72}$. The fitted residuals have no ties. Standardizing gives $Z=(\Pi-\mu)/s$ and the approximate two-sided p-value $2\Phi(-|Z|)$.
 
-Could the annual pattern itself change? I added $u\cos(2\pi m/12)$ and $u\sin(2\pi m/12)$ to the quadratic model. Under $H_0$ both coefficients vanish, versus at least one nonzero. The joint test gives $W=`r fmt(season[1],2)`$ (2 df), $p=`r fmt(season[2],4)`$. At 5%, there is evidence that the annual cycle changes over time. Fixed offsets remove average seasonality reasonably well, but miss some change in seasonal amplitude or timing.
+```{r rank-results, results='asis'}
+tableout(data.frame(Fit=names(checks), Pairs=sapply(checks, "[[", "pairs"),
+  Z=fmt(sapply(checks,"[[","z.rank"),3),
+  'Two-sided p'=fmt(sapply(checks,"[[","p.rank"),4),check.names=FALSE))
+```
 
-The two interaction terms let a smooth annual wave change with time. This tests a feature that fixed month offsets cannot capture. I carry the quadratic plus fixed offsets forward as my forecasting baseline, and use the interactions as a diagnostic. The resulting forecasts assume a common calendar adjustment across years. The test gives a concrete reason that this assumption could hurt their accuracy.
+For the linear fit, 7,336 increasing pairs give $Z=-1.779$ and $p=0.0752$. At 5% I fail to reject. A decrease followed by an increase can offset in the pair count, which explains why the test can miss the bend visible in the plot.
+
+**2. Remaining annual dependence: fixed-lag ACF tests.** I chose lags 12 and 24 because they compare the same calendar month one and two years apart. Lag 1 is a short-run comparison. For each chosen $j$, $H_0:\rho(j)=0$ versus $H_1:\rho(j)\ne0$. The sample ACF $\hat\rho(j)$ divides the lag-$j$ sample autocovariance by the lag-zero autocovariance. Under the lecture's iid finite-variance reference, $Z_j=\sqrt{180}\,\hat\rho(j)$ is approximately standard normal and $p_j=2\Phi(-|Z_j|)$. The corresponding pointwise 5% cutoff is $|\hat\rho(j)|>0.146$.
+
+```{r lag-results, results='asis'}
+lag.rows <- lapply(names(checks), function(name) {
+  x <- checks[[name]]
+  data.frame(Fit=name, Lag=c(1,12,24), ACF=fmt(x$rho,3), Z=fmt(x$z,3),
+             p=formatC(x$p.lag,format="g",digits=3))
+})
+tableout(do.call(rbind,lag.rows))
+```
+
+**3. Remaining serial dependence: Box–Pierce test.** I use $h=24$ to include two annual cycles and the intervening months. Under $H_0$, all of $\rho(1),\ldots,\rho(24)$ equal zero. Under $H_1$, at least one differs from zero. The original lecture statistic is $Q=180\sum_{j=1}^{24}\hat\rho(j)^2$. I use the lecture's approximate right-tail probability $P(\chi^2_{24}\ge Q)$ for this pre-ARMA diagnostic. Question 7 separately tests fitted ARMA innovations with Ljung–Box and adjusts for the fitted ARMA coefficients.
+
+```{r joint-results, results='asis'}
+tableout(data.frame(Fit=names(checks), Q=fmt(sapply(checks,"[[","Q"),2),
+                    df=24, p=formatC(sapply(checks,"[[","p.Q"),format="g",digits=3)))
+```
+
+**Interpretation.** The joint test rejects at 5% ($Q=402.91$, 24 df). Lag 1 has a large positive correlation of 0.846. At lag 12, the correlation is 0.288 ($p=0.000111$), while at lag 24 it is 0.052 ($p=0.484$). The month indicators force each calendar month's mean training residual to zero. Even after that average calendar effect is removed, months a year apart tend to deviate from their fitted values in the same direction. The two-year lag supplies much weaker evidence. Slow changes in the baseline could also contribute to the one-year correlation.
 
 ## 5. Stationarity and remaining correlation
 
-A weakly stationary process has finite second moments, a constant mean, and a covariance $\operatorname{Cov}(R_t,R_{t+h})=\gamma(h)$ depending only on lag $h$. In particular its variance $\gamma(0)$ is constant (course notes, Chapters 1–2). The lower panel in Question 4 varies around zero without the original upward drift. Runs of residuals with the same sign, larger late fluctuations, and the changing seasonal pattern qualify a stationary approximation.
+A weakly stationary process has finite second moments, a constant mean, and a covariance $\operatorname{Cov}(R_t,R_{t+h})=\gamma(h)$ depending only on lag $h$. In particular its variance $\gamma(0)$ is constant (course notes, Chapters 1–2). The linear residual series in Question 4 varies around zero without the original upward drift. Multi-year runs of errors with the same sign and larger late fluctuations raise doubts about a constant mean and variance. A correlation at lag 12 is compatible with weak stationarity if it recurs with the same strength over time.
 
-```{r correlations, fig.height=2.15}
+```{r correlations, fig.height=2.55}
 corplot <- function(x, partial=FALSE, title="", L=24) {
   values <- if (partial) as.numeric(pacf(x,lag.max=L,plot=FALSE)$acf) else
     as.numeric(acf(x,lag.max=L,plot=FALSE)$acf)[-1]
   plot(seq_len(L), values, type="h", lwd=1.7, col=teal, main=title, cex.main=.95,
-       xlab="Lag (months)", ylab=if(partial) "Partial ACF" else "ACF",
+       xlab="Lag (months)", ylab=if(partial) "Partial ACF (unitless)" else "ACF (unitless)",
        ylim=range(c(-.25,.25,values)), xaxs="i", xlim=c(0,L+1))
   abline(h=0,col=dark)
   abline(h=c(-1,1)*1.96/sqrt(length(x)),col=rust,lty=2)
@@ -190,11 +204,18 @@ corplot(r,title="Training residual ACF",L=36)
 corplot(r,TRUE,"Training residual PACF",36)
 ```
 
-The ACF starts at 0.80, 0.54, and 0.35, then decays and turns negative at intermediate lags. At 12 and 24 months it is 0.06 and $-0.07$ (PACF $-0.09$ and $-0.02$). Neither annual ACF stands out against the approximate white-noise guides ($\pm0.146$). Those guides are pointwise references, not formal tests for an already correlated series. The PACF is dominated by lags 1 and 2 (0.80 and $-0.27$). Persistence across nearby months is compatible with weak stationarity, which permits nonzero autocorrelations as long as they depend only on the lag. One finite realization cannot establish that population moments are constant across time.
+The sample ACF at lags 1–3 is 0.846, 0.653, and 0.509. At 12 and 24 months it is 0.288 and 0.052, respectively. Only the first annual lag exceeds the nominal pointwise white-noise guides ($\pm0.146$). The PACF is 0.846 at lag 1 and $-0.220$ at lag 2. At lags 12 and 24 the PACF is $-0.017$ and $-0.069$. Once intervening lags are accounted for, there is little direct partial correlation at either annual lag. Each plotted ACF pools observations from the entire training period. A single pooled value can hide a correlation that changes between early and late years, so the graph alone cannot establish stationarity.
 
-**What the lags tell us.** A positive lag-1 ACF means that a month above its fitted baseline tends to be followed by another above-baseline month. The lag-2 ACF includes association transmitted through the intervening month. The lag-2 PACF asks what two months ago adds after accounting for last month. Its negative sign can therefore coexist with a positive lag-2 ACF. The small annual correlations give little reason to add a seasonal AR term solely because the original series had December peaks. They answer a different question from the changing-seasonality test in Question 4, which measured a systematic change in the mean seasonal pattern.
+The residuals are centered near zero with no visible trend or seasonal cycle, so an approximately stationary model is plausible.
+The slowly decaying ACF with a PACF that cuts off after about lag 2 points to AR(2).
 
-**Working decision.** I use an undifferenced residual model because deviations repeatedly return toward zero and the ACF declines quickly from its initial peak. Differencing these residuals would change the target to month-to-month changes in those deviations. There is less support for constant variance. The residual standard deviations for the first and last 90 training months are `r fmt(sd(head(r,90)))` and `r fmt(sd(tail(r,90)))` estimated firearms. That comparison is sensitive to the late spikes. I treat stationarity as a working approximation for point forecasts, with greater uncertainty about the size of exceptional errors.
+Some correlation remains at lag 12 (0.29, just above the bound), so a little seasonality is left over. By lag 24 it is gone.
+
+The late-2012 to early-2013 spike and the growing spread could break constant variance.
+
+A positive lag-1 ACF means that a month above its fitted baseline tends to be followed by another above-baseline month. The lag-2 ACF includes association transmitted through the intervening month. The lag-2 PACF asks what two months ago adds after accounting for last month. Its negative sign can therefore coexist with a positive lag-2 ACF. The positive lag-12 ACF warrants checking for annual structure again after fitting the short-lag models.
+
+A graph cannot prove stationarity because it is a single finite realization. We judge by eye, and a different stretch of data could look different. A plot can only fail to reject stationarity. 
 
 \newpage
 
@@ -206,27 +227,27 @@ models <- lapply(orders,function(o) arima(r,order=o,method="ML",include.mean=FAL
 stopifnot(all(vapply(models,function(x) x$code==0, logical(1))))
 ```
 
-Each candidate explains the same 180 deviations from the quadratic and calendar-month baseline. I use the ACF and PACF patterns from Question 5 to choose a small order within each model family (Chapter 3, Lectures 11–14).
+Each candidate explains the same 180 deviations from the linear trend and calendar-month baseline. I use the ACF and PACF patterns from Question 5 to choose a small order within each model family (Chapter 3, Lectures 11–14).
 
-**Why these orders?** In a pure AR process the population PACF cuts off after its order. The sizable second partial correlation motivates allowing two previous residuals to enter directly. In a pure MA process the population ACF cuts off after its order because observations farther apart share no innovations. MA(2) tests whether the first two lags account for enough of the dependence despite the lag-3 ACF of 0.35. A mixed model can have tails in both plots. ARMA(1,1) is the smallest mixed model and allows the unusually strong first lag to differ from the later decay. Sample plots are noisy, so these patterns nominate candidates for fitting and checking.
+**Why these orders?** In a pure AR process the population PACF cuts off after its order. The sizable second partial correlation motivates allowing two previous residuals to enter directly. In a pure MA process the population ACF cuts off after its order because observations farther apart share no innovations. MA(2) tests whether the first two lags account for enough of the dependence despite the lag-3 ACF of 0.509. A mixed model can have tails in both plots. ARMA(1,1) is the smallest mixed model and allows the unusually strong first lag to differ from the later decay. Sample plots are noisy, so these patterns nominate candidates for fitting and checking.
 
 Let $X_t=\widehat R_t$ in estimated firearms and $Z_t$ denote zero-mean white noise. Gaussian maximum likelihood fits use $d=0$ and a fixed zero mean because the regression centered the residuals. Under R's positive MA sign convention the fitted equations, with coefficients rounded to three decimals, are
 
 $$\begin{aligned}
-\mathrm{AR}(2):\quad X_t &= 1.009X_{t-1}-0.266X_{t-2}+Z_t,\\
-\mathrm{MA}(2):\quad X_t &= Z_t+0.982Z_{t-1}+0.402Z_{t-2},\\
-\mathrm{ARMA}(1,1):\quad X_t &=0.682X_{t-1}+Z_t+0.343Z_{t-1}.
+\mathrm{AR}(2):\quad X_t &= 1.044X_{t-1}-0.230X_{t-2}+Z_t,\\
+\mathrm{MA}(2):\quad X_t &= Z_t+1.044Z_{t-1}+0.453Z_{t-2},\\
+\mathrm{ARMA}(1,1):\quad X_t &=0.767X_{t-1}+Z_t+0.309Z_{t-1}.
 \end{aligned}$$
 
 ```{r fitted-table, results='asis'}
 tableout(data.frame(Model=names(models),
-  'Innovation variance (sales squared)'=fmt(sapply(models,function(m) m$sigma2)),
+  'Innovation variance [(firearms/month)^2]'=fmt(sapply(models,function(m) m$sigma2)),
   AIC=fmt(sapply(models,AIC),2), check.names=FALSE))
 ```
 
-**How to read the fitted equations.** In AR(2), increasing last month's deviation by 10,000 while holding the deviation two months ago fixed raises the next prediction by roughly 10,090. The negative second coefficient corrects for how much of that persistence was already evident two months earlier. In MA(2), a new positive innovation of 10,000 contributes about 9,820 one month later and 4,020 two months later. Its direct contribution ends there. In ARMA(1,1), the same innovation affects next month's forecast through both the observed deviation and the previous innovation, for an initial response of about $(0.682+0.343)10{,}000=10{,}250$. Further responses shrink by a factor of 0.682 per month.
+**How to read the fitted equations.** In AR(2), increasing last month's deviation by 10,000 while holding the deviation two months ago fixed raises the next prediction by roughly 10,440. The negative second coefficient corrects for how much of that persistence was already evident two months earlier. In MA(2), a new positive innovation of 10,000 contributes about 10,440 one month later and 4,530 two months later. Its direct contribution ends there. In ARMA(1,1), the same innovation affects next month's forecast through both the observed deviation and the previous innovation, for an initial response of about $(0.767+0.309)10{,}000=10{,}760$. Further responses shrink by a factor of 0.767 per month.
 
-Innovation variance measures the spread of the part left unpredictable one month ahead. Taking its square root puts the measure back in firearms. The fitted values are about 76,600 for AR(2), 81,400 for MA(2), and 76,400 for ARMA(1,1). AIC balances likelihood fit against the number of estimated parameters. All three candidates use the same response, months, mean convention, and parameter count, so their penalties are equal. MA(2)'s AIC exceeds the minimum by 22.30. AR(2)'s exceeds it by only 0.57. The next question checks whether the fitted innovations still contain a predictable pattern.
+Innovation variance measures the spread of the part left unpredictable one month ahead. Taking its square root puts the measure back in firearms. The fitted values are about 78,520 for AR(2), 87,346 for MA(2), and 78,177 for ARMA(1,1). AIC balances likelihood fit against the number of estimated parameters. All three candidates use the same response, months, mean convention, and parameter count, so their penalties are equal. MA(2)'s AIC exceeds the minimum by 39.70. AR(2)'s exceeds it by only 1.55. The next question checks whether the fitted innovations still contain a predictable pattern.
 
 \newpage
 
@@ -240,14 +261,14 @@ par(mfrow=c(1,3),mar=c(3.3,3.5,1.5,.7),mgp=c(2,.52,0))
 for (name in names(models)) {
   e <- as.numeric(resid(models[[name]]))
   a <- as.numeric(acf(e,lag.max=24,plot=FALSE)$acf)[-1]
-  plot(1:24,a,type="h",col=teal,lwd=1.6,xlab="Lag (months)",ylab="ACF",
-       ylim=c(-.45,.45),main=name,cex.main=.95)
+  plot(1:24,a,type="h",col=teal,lwd=1.6,xlab="Lag (months)",ylab="ACF (unitless)",
+       ylim=c(-.45,.45),main=paste(name, "innovation ACF"),cex.main=.9)
   abline(h=0,col=dark)
   abline(h=c(-1,1)*1.96/sqrt(length(e)),lty=2,col=rust)
 }
 ```
 
-**Ljung–Box test at lag 24.** For each model, $H_0:\rho_1=\cdots=\rho_{24}=0$ for the innovations. Under $H_A$, at least one of these autocorrelations is nonzero. Each candidate estimates two AR/MA coefficients, giving $24-p-q=22$ reference degrees of freedom. A p-value is the approximate probability, under that model's null, of a $Q$ statistic at least as large as the observed one.
+**Ljung–Box test at lag 24.** For each model, $H_0:\rho_1=\cdots=\rho_{24}=0$ for the innovations. Under $H_A$, at least one of these autocorrelations is nonzero. Each candidate estimates two AR/MA coefficients, giving $24-p-q=22$ reference degrees of freedom. The statistic is $Q=180(182)\sum_{j=1}^{24}\hat\rho_e(j)^2/(180-j)$, where $\hat\rho_e(j)$ is the innovation ACF at lag $j$. I compare each observed $Q$ to the upper tail of a $\chi^2_{22}$ distribution. A small p-value indicates more combined autocorrelation than expected under the null.
 
 ```{r ljung-box, results='asis'}
 lb <- Map(function(model,o) Box.test(resid(model),lag=24,type="Ljung-Box",
@@ -263,17 +284,21 @@ winner <- eligible[which.min(sapply(models[eligible],AIC))]
 best <- models[[winner]]
 ```
 
-**AR(2).** With $p=0.395$, the combined correlations are compatible with the null. Lag 19 barely crosses a pointwise guide. An isolated crossing among 24 lags can occur by chance.
+**AR(2).** With $p=0.391$, the joint test fails to reject. Lags 12 and 24 cross their pointwise guides. This gives a specific reason to watch annual dependence even though the joint statistic is unexceptional.
 
-**MA(2).** With $p=0.0000184$, a statistic this large would be very rare under the null. Several correlations, including lags 2 and 3, cross the guides. The short moving-average window leaves systematic dependence.
+**MA(2).** With $p=3.45\times10^{-10}$, the joint test rejects. Lags 1, 2, 3, 5, 10, and 12 cross the pointwise guides. A two-month shock window leaves predictable variation at several time scales.
 
-**ARMA(1,1).** With $p=0.329$, the test also fails to reject. Lag 19 crosses the lower guide, but there is little joint evidence of serial correlation through lag 24. Among the two models passing the diagnostic, ARMA(1,1) has the lowest training AIC (4565.94 versus 4566.51). I selected it before scoring 2015. The 0.57 AIC difference indicates little separation from AR(2).
+**ARMA(1,1).** With $p=0.403$, the joint test fails to reject. The annual lags 12 and 24 cross the pointwise guides here too. Those individual crossings and the joint result can coexist because the joint test compares the combined evidence across all 24 lags to its own reference distribution.
 
-**Why choose ARMA(1,1) when AR(2) has the larger test p-value?** The Ljung–Box test pools squared sample autocorrelations, with lag 24 covering two complete annual cycles. The p-value measures evidence against a model's zero-correlation hypothesis. Once both candidates pass this check, a larger p-value does not establish a better forecast. I use the lower AIC to break the tie. Both models have two dependence coefficients, their one-step error scales differ by only about 100–200 firearms, and neither shows a strong annual pattern in its innovation ACF. The choice is narrow enough that AR(2) remains a credible description of the training residuals. The selection uses no 2015 outcomes.
+**Model choice.** AR(2) and ARMA(1,1) both pass the joint diagnostic and both use two dependence coefficients. I selected ARMA(1,1) using its lower training AIC (4574.25 versus 4575.80) and slightly smaller innovation standard deviation (78,177 versus 78,520 estimated firearms per month). The AIC difference of 1.55 gives a modest preference. AR(2) remains a credible alternative, and the annual-lag crossings are a limitation of both fits. All selection decisions preceded the 2015 evaluation.
 
 **Spikes remain.** The largest absolute innovation occurs in December 2012, about `r fmt(max(abs(resid(best)))/sqrt(best$sigma2),1)` fitted innovation standard deviations from zero. Weak residual autocorrelation can coexist with very large errors. The test addresses linear dependence, not normality, independence, or the cause of that spike.
 
 In December 2012, observed sales exceeded the selected model's one-step prediction by about `r fmt(as.numeric(resid(best))[which(train$date==as.Date("2012-12-01"))])` estimated firearms. Accounting for December's usual level and recent positive deviations still leaves a large surprise. The one-step prediction uses earlier observations and parameters estimated over the full training period. It identifies an unusually large in-sample error. Only the 2015 forecasts below were scored on data excluded from estimation.
+
+A short-memory linear ARMA model can't produce one-off jumps like these, so they stay as outliers.
+
+The residual ACF still pokes slightly outside the bounds at lags 12 and 24. The seasonal pattern is not perfectly constant (the December peak grows over time).
 
 \newpage
 
@@ -281,7 +306,7 @@ In December 2012, observed sales exceeded the selected model's one-step predicti
 
 ```{r forecasting, include=FALSE}
 residual.forecast <- as.numeric(predict(best,n.ahead=12)$pred)
-forecast <- as.numeric(predict(trend,newdata=test)) + residual.forecast
+forecast <- as.numeric(predict(linear,newdata=test)) + residual.forecast
 last.year <- subset(train, year == 2014)
 benchmark <- last.year$y[match(test$month.num, last.year$month.num)]
 scores <- function(f) {
@@ -291,56 +316,63 @@ scores <- function(f) {
 ```
 
 Writing $T=180$ for December 2014, the two forecasting rules are
-$$\widehat Y_{T+h\mid T}=\widehat\beta_0+\widehat\beta_1 u_{T+h}
- +\widehat\beta_2 u_{T+h}^2+\widehat\gamma_{m(T+h)}+\widehat X_{T+h\mid T},
+$$\widehat Y_{T+h\mid T}=\widehat\beta_0+\widehat\beta_1(T+h)+\widehat\gamma_{m(T+h)}+\widehat X_{T+h\mid T},
  \qquad \widehat Y^{\rm benchmark}_{T+h\mid T}=Y_{T+h-12}.$$
-For horizon $h=1,\ldots,12$, the forecast is the fitted quadratic trend and month offset at $t=180+h$, plus the ARMA forecast of the residual at that horizon. Future innovations have conditional forecast zero. After the one-step forecast, the residual forecast decays by a factor of about 0.682 per month. The benchmark repeats the corresponding observed month of 2014. All forecasts use the same December 2014 origin.
+For horizon $h=1,\ldots,12$, the forecast is the fitted linear trend and month offset at $t=180+h$, plus the ARMA forecast of the residual at that horizon. Future innovations have conditional forecast zero. After the one-step forecast, the residual forecast decays by a factor of about 0.767 per month. The benchmark repeats the corresponding observed month of 2014. All forecasts use the same December 2014 origin.
 
-```{r forecast-plot, fig.height=2.45}
+```{r forecast-plot, fig.height=2.85}
 style()
 curves <- cbind(test$y,forecast,benchmark)/1e6
 matplot(1:12,curves,type="o",pch=c(16,1,4),lty=c(1,2,3),lwd=1.6,
-        col=c(dark,teal,rust),xaxt="n",xlab="2015",ylab="Estimated sales (millions)")
+        col=c(dark,teal,rust),xaxt="n",xlab="Calendar month in 2015",ylab="Sales (million firearms/month)",
+     main="2015 U.S. monthly sales: observations and forecasts")
 axis(1,1:12,month.abb)
-legend("topleft",c("Observed","Trend + ARMA","Same month of 2014"),
+legend("topleft",c("Observed","Linear trend + ARMA","Same month of 2014"),
        col=c(dark,teal,rust),lty=1:3,pch=c(16,1,4),bty="n",cex=.82)
 ```
 
-For January, the deterministic component is `r fmt(as.numeric(predict(trend,newdata=test))[1])` and the predicted residual is `r fmt(residual.forecast[1])` estimated firearms. Adding them gives `r fmt(forecast[1])`. By December, the residual contribution is only `r fmt(residual.forecast[12])`, so the long-horizon model forecast depends almost entirely on the extrapolated baseline and the usual December offset. The seasonal benchmark instead starts from the observed level of each corresponding 2014 month. Neither method updates its forecast with actual 2015 sales as they arrive.
+For January, the deterministic component is `r fmt(as.numeric(predict(linear,newdata=test))[1])` and the predicted residual is `r fmt(residual.forecast[1])` estimated firearms. Adding them gives `r fmt(forecast[1])`. By December, the residual contribution is only `r fmt(residual.forecast[12])`, so the long-horizon model forecast depends almost entirely on the extrapolated baseline and the usual December offset. The seasonal benchmark instead starts from the observed level of each corresponding 2014 month. Neither method updates its forecast with actual 2015 sales as they arrive.
 
-**Monthly results** (thousands of estimated firearms, rounded).
+**Monthly results** 
 
 ```{r monthly-forecasts, results='asis'}
-half <- function(i) data.frame(Month=month.abb[i],Observed=round(test$y[i]/1000),
-                                Model=round(forecast[i]/1000),Benchmark=round(benchmark[i]/1000))
+half <- function(i) data.frame(Month=month.abb[i],Observed=round(test$y[i]),
+                                Model=round(forecast[i]),Benchmark=round(benchmark[i]))
 monthly.results <- cbind(half(1:6), half(7:12))
 knitr::kable(monthly.results, format="latex", booktabs=TRUE, row.names=FALSE,
              col.names=rep(c("Month","Observed","Model","Benchmark"),2))
 ```
 
-**Errors over all 12 months** (estimated firearms, unrounded inputs).
+**Errors over all 12 months** (estimated firearms per month, calculated before rounding).
 
 ```{r scoring, results='asis'}
-score.table <- rbind('Trend + ARMA(1,1)'=scores(forecast),
+score.table <- rbind('Linear trend + ARMA(1,1)'=scores(forecast),
                      'Same month of 2014'=scores(benchmark))
 tableout(data.frame(Method=rownames(score.table), MAE=fmt(score.table[,1]),
                     RMSE=fmt(score.table[,2])))
 ```
 
-For errors $e_h=Y_{180+h}-\widehat Y_{180+h}$, MAE averages $|e_h|$ and RMSE is the square root of the average $e_h^2$. **The same-month benchmark wins on both measures for 2015.** The model overpredicts January through November, then underpredicts December by about 508,000. Its December miss is smaller than the benchmark's roughly 651,000, but that advantage cannot offset the model's errors earlier in the year.
+For errors $e_h=Y_{180+h}-\widehat Y_{180+h}$, MAE averages $|e_h|$ and RMSE is the square root of the average $e_h^2$. **The same-month benchmark wins on both measures for 2015.** The model overpredicts January through October and underpredicts November and December. Its December miss of about 741,000 estimated firearms exceeds the benchmark’s December miss of about 651,000.
 
-The benchmark cuts MAE by `r fmt(100*(1-score.table[2,1]/score.table[1,1]),1)`% and RMSE by `r fmt(100*(1-score.table[2,2]/score.table[1,2]),1)`%. MAE describes the average size of a monthly miss in firearms. RMSE gives large misses more influence because it squares each error before averaging. This explains why the benchmark's December miss narrows its advantage on RMSE. It still has smaller absolute errors in `r sum(abs(test$y-benchmark)<abs(test$y-forecast))` of the 12 months. The persistent overprediction fits the risk identified in Question 4. A quadratic estimated across the full training period projects continued growth, while the recent 2014 levels gave a closer reference for most of 2015. One holdout year cannot tell us whether that ranking will repeat.
+The benchmark cuts MAE by `r fmt(100*(1-score.table[2,1]/score.table[1,1]),1)`% and RMSE by `r fmt(100*(1-score.table[2,2]/score.table[1,2]),1)`%. MAE describes the average size of a monthly miss in firearms. RMSE gives large misses more influence because it squares each error before averaging. December contributes heavily to both RMSEs, particularly for the model. The benchmark has smaller absolute errors in `r sum(abs(test$y-benchmark)<abs(test$y-forecast))` of the 12 months. The benchmark wins on average because error magnitudes differ, including a roughly 90,000-firearm advantage in December. One holdout year cannot tell us whether that ranking will repeat.
+
+The December 2015 spike (actual 2,350,708) dominates the errors. The model forecast about 1,609,717 and the benchmark 1,700,097.
+The model's linear trend overshoots early 2015. For example, the January forecast is about 1,260,890 against an actual of 1,068,401.
+2014 was a good reference because sales had dropped after the 2013 surge, so the previous year's level matched 2015 better than the long-run trend.
+
+The ARMA part adds about +136,000 in January and decays to about +7,000 by December. The persistence helps near the start but fades.
 
 ## 9. Maryland around the 2013 policy event
 
-Aisch and Keller (2016) identify May 2013 as the month Maryland approved new restrictions. The figure shows monthly state estimates from the project formula across 2012–2014. The dotted line marks May approval. The dashed line marks the October deadline discussed in the article. Plotting both dates lets us see whether the largest change coincided with approval or occurred in the intervening months.
+Aisch and Keller (2016) identify May 2013 as the month Maryland approved new restrictions. For each Maryland month in 2012–2014, I apply the Question 1 weights to that state’s own checks. For example, September 2013 gives $1.1(38{,}055+9{,}912)+2(17)=52{,}797.7$ estimated firearms. The dotted line marks May approval. The dashed line marks the October deadline discussed in the article. Plotting both dates lets us see whether the largest change coincided with approval or occurred in the intervening months.
 
-```{r maryland, fig.height=1.95}
+```{r maryland, fig.height=2.8}
 md <- subset(raw,state=="Maryland" & year>=2012 & year<=2014)
 md <- md[order(md$date),]
 style()
 plot(md$date,md$y/1000,type="o",pch=16,cex=.5,col=teal,
-     ylab="Estimated sales (000s)",xlab="Month",xaxt="n")
+     main="Maryland estimated monthly firearm sales, 2012-2014",
+     ylab="Sales (thousand firearms/month)",xlab="Calendar month",xaxt="n")
 ticks <- seq(as.Date("2012-01-01"),as.Date("2014-07-01"),by="6 months")
 axis.Date(1,at=ticks,format="%b %Y")
 abline(v=as.Date("2013-05-01"),lty=3)
@@ -351,13 +383,27 @@ legend("topleft", c("May approval","October deadline"),
 
 Estimated sales fell from 15,433 in May to 13,113 in July, then reached 52,798 in September before dropping to 21,381 in October. September was the final full month before the October deadline. The timing is consistent with buyers moving purchases forward, but these monthly counts contain no information about individual buyers’ motives. Maryland alone supplies no estimate of what September sales would have been without the policy. Nationwide demand, seasonal buying, or shifts in the timing of purchases could also affect the series.
 
-I chose Maryland because the monthly approval date permits a before-and-after comparison within the event year. The surrounding years also let us compare September with the same calendar month. Maryland's September estimates were 10,220 in 2012, 52,798 in 2013, and 7,813 in 2014. The 2013 peak was more than five times the previous September's level. That comparison helps distinguish an exceptional September from an ordinary recurring fall peak. It still leaves open what would have happened in Maryland in 2013 under the same national conditions without the policy change.
+I chose Maryland because the monthly approval date permits a before-and-after comparison within the event year. The surrounding years also let us compare September with the same calendar month. Maryland's September estimates were 10,220 in 2012, 52,798 in 2013, and 7,813 in 2014. The 2013 peak was more than five times the previous September's level. That comparison helps distinguish an exceptional September from an ordinary recurring fall peak. 
+
+Checked results:
+
+The 2013 series is steady at about 13,000 to 20,000 until a sharp jump in September 2013 to about 52,798.
+By comparison, August 2013 was 15,975 and the 2012 monthly average was about 12,208.
+The next month, October, was 21,381, and sales drift back to normal.
+Yearly averages are 12,208 in 2012, 20,166 in 2013 and 10,939 in 2014.
+
+Why not causal:
+
+The article says buyers rushed to beat the October deadline after the law passed. That is one plausible explanation for the jump, but the data alone can't separate it from other things.
+Other factors hit at the same time, such as the national surge after Sandy Hook in Dec 2012 and Jan 2013.
+There is no comparison group, and background checks are not completed sales.
+
 
 ## 10. Conclusions
 
-The national series contains a recurring calendar pattern and a changing baseline. Across the training years, December averaged about 1.25 million estimated sales, more than twice the June average. Even against that high December baseline, the 2012 peak stands out. A linear trend left a long run of negative deviations in the middle years. Allowing curvature reduced that pattern, although the strength of the annual cycle also appears to change.
+Estimated U.S. firearm sales combined a rising long-run level with a recurring calendar pattern. Across the training years, December averaged about 1.25 million firearms per month, more than twice the June average. December 2012 stood out even among Decembers. The fitted linear trend rose by about 44,018 firearms per month between corresponding months one year apart. Multi-year runs of negative residuals show the limitations of a constant slope. Month indicators removed the average calendar pattern, yet residuals one year apart still had a correlation of 0.288.
 
-Departures from the fitted baseline persisted across nearby months. AR(2) and ARMA(1,1) both removed much of that dependence. The mixed model earned a narrow selection on training AIC. December 2012 still produced a one-step error about 7.3 innovation standard deviations above zero, even after accounting for recent months and the usual December peak. For 2015, extrapolating the fitted trend put forecasts above observed sales through November. Repeating the same month of 2014 reduced mean absolute error from about 235,000 to 108,000 estimated firearms. Both methods missed the December surge. A single test year establishes which method worked better in 2015 and leaves their longer-run ranking uncertain.
+Departures from the baseline persisted across adjacent months. AR(2) and ARMA(1,1) both passed the joint innovation check, although individual annual-lag correlations remained visible. ARMA(1,1) had the lowest training AIC. December 2012 still produced an error about seven innovation standard deviations above zero. In 2015, the selected model overpredicted January through October and missed the December surge by about 741,000 firearms. Repeating each corresponding 2014 observation reduced mean absolute error from about 132,368 to 108,228 firearms per month. The two methods each came closer in six months. This comparison establishes their ranking for one forecast year.
 
 Two limitations affect interpretation. First, background checks measure transactions imperfectly. Some private sales are absent, and fixed conversion factors cannot recover how many firearms changed hands in each transaction (Aisch and Keller, 2016). Forecast errors therefore describe errors in the estimated series. Second, the Maryland comparison has no untreated comparison group. A spike following policy approval gives its timing, but concurrent national changes or buyers shifting purchases between months could produce a similar pattern.
 
@@ -370,8 +416,6 @@ STAT 137. (Fall 2026). *Trends, seasonality, and ARMA models in estimated gun sa
 STAT 137. (Fall 2026). *Applied Time Series Analysis*. Course notes, Chapters 1–3 and Lectures 7–14.
 
 ## Appendix. Reproducible R code
-
-Place `STAT137_Gun_Sales_2000_2015.csv` beside the R Markdown file and choose **Knit to PDF** in RStudio. To run the analysis interactively, start in the folder containing the CSV and execute the code below in order. Each block uses objects created in the preceding blocks. The appendix draws its code directly from the analysis chunks used to knit the report.
 
 ### A1. Data checks, response, and training split
 
@@ -389,12 +433,24 @@ Place `STAT137_Gun_Sales_2000_2015.csv` beside the R Markdown file and choose **
 ```{r appendix-seasonal-spread, ref.label='seasonal-spread', eval=FALSE, echo=TRUE, include=TRUE}
 ```
 
-### A3. Regression, curvature test, and residual plots
+### A3. Regression, residual plots, and Lecture 9 tests
 
 ```{r appendix-decomposition, ref.label='decomposition', eval=FALSE, echo=TRUE, include=TRUE}
 ```
 
 ```{r appendix-residual-comparison, ref.label='residual-comparison', eval=FALSE, echo=TRUE, include=TRUE}
+```
+
+```{r appendix-rank-results, ref.label='rank-results', eval=FALSE, echo=TRUE, include=TRUE}
+```
+
+```{r appendix-lag-results, ref.label='lag-results', eval=FALSE, echo=TRUE, include=TRUE}
+```
+
+```{r appendix-joint-results, ref.label='joint-results', eval=FALSE, echo=TRUE, include=TRUE}
+```
+
+```{r appendix-shape-check, ref.label='shape-check', eval=FALSE, echo=TRUE, include=TRUE}
 ```
 
 ### A4. Dependence and candidate model fits
@@ -444,14 +500,14 @@ print(d[1, c("handgun","longgun","multiple_corrected","y")])
 print(tapply(d$y, d$year, mean))
 print(d[d$date %in% as.Date(c("2012-12-01","2013-01-01","2015-12-01")), "y"])
 print(tapply(train$y, train$month, median))
+print(mean(train$y[train$month.num==12 & train$year!=2012]))
 print(sum(tapply(train$y, train$year, which.max) == 12))
 print(d$y[d$date=="2012-12-01"] - means[12])
 
 # Baseline coefficients, tests, and variation around the trend
 print(coef(linear))
-print(coef(trend))
-print(list(curvature=curve, changing_season=season))
-print(sapply(list(linear, trend), function(m) sqrt(mean(resid(m)^2))))
+print(checks)
+print(sqrt(mean(r^2)))
 print(tapply(resid(linear), train$year, mean))
 print(c(first_half=sd(head(r,90)), second_half=sd(tail(r,90))))
 lags <- c(1,2,3,12,24)
@@ -473,7 +529,7 @@ print(data.frame(date=train$date[peak], innovation=e[peak],
                  standardized=e[peak]/sqrt(best$sigma2)))
 
 # Forecast components and performance on the original scale
-print(data.frame(date=test$date, baseline=predict(trend,newdata=test),
+print(data.frame(date=test$date, baseline=predict(linear,newdata=test),
                  residual=residual.forecast, forecast, benchmark, observed=test$y))
 print(score.table)
 print(100*(1-score.table[2,]/score.table[1,]))
