@@ -9,7 +9,7 @@ header-includes:
   - \usepackage{xcolor}
   - \definecolor{ink}{HTML}{175864}
   - \usepackage{fancyhdr}
-  - \pagestyle{fancy}
+  - \pagestyle{fancy} 
   - \fancyhf{}
   - \fancyhead[L]{\small STAT 137 \quad Applied Time Series Analysis}
   - \fancyhead[R]{\small Fall 2026}
