@@ -8,6 +8,13 @@ output: pdf_document
 fontsize: 10pt
 geometry: margin=0.76in
 header-includes:
+  - \usepackage{float}
+  - \setlength{\tabcolsep}{4pt}
+  - \renewcommand{\arraystretch}{0.95}
+  - \setlength{\parskip}{3pt}
+  - \setlength{\abovedisplayskip}{4pt}
+  - \setlength{\belowdisplayskip}{4pt}
+  
   - \usepackage{booktabs}
   - \usepackage{xcolor}
   - \definecolor{ink}{HTML}{175864}
@@ -20,19 +27,27 @@ header-includes:
   - \fancyfoot[C]{\small\thepage}
   - \fancypagestyle{plain}{\fancyhf{}}
   - \setlength{\headheight}{14pt}
+  
   - \pretitle{\vspace*{\fill}\begin{center}\fontsize{26}{32}\selectfont}
-  - \posttitle{\par\end{center}\vskip 1.5em}
+  - \posttitle{\par\end{center}\vskip 3em}
   - \preauthor{\begin{center}\large}
-  - \postauthor{\end{center}\vskip 1em}
+  - \postauthor{\end{center}\vskip 2em}
   - \predate{\begin{center}\large}
   - \postdate{\end{center}\vspace*{\fill}\clearpage\setcounter{page}{1}}
 ---
 
 ```{r setup, include=FALSE}
-# To knit, place the original project CSV beside this .Rmd and choose Knit to PDF.
-# Requires rmarkdown, knitr, Pandoc, and a LaTeX installation with XeLaTeX.
-knitr::opts_chunk$set(echo=FALSE, message=FALSE, fig.width=7.0, fig.height=2.2,
-                      fig.align="center", out.width="100%", dev="pdf")
+knitr::opts_chunk$set(echo=FALSE, message=FALSE, fig.width=6.4, fig.height=1.9,
+                      fig.align="center", out.width="92%", dev="pdf", fig.pos="H")
+
+style <- function() par(mfrow=c(1,1), mar=c(3,4.3,1.8,.5), mgp=c(1.9,.55,0), tcl=-.3,
+                        cex.main=.85, cex.lab=.85, cex.axis=.78, las=1, bty="l",
+                        col.axis=dark)
+
+tableout <- function(x, ...) invisible(cat("\\begin{center}\n",
+  paste(knitr::kable(x, format="latex", booktabs=TRUE, row.names=FALSE, ...), collapse="\n"),
+  "\n\\end{center}\n"))
+
 csv <- "STAT137_Gun_Sales_2000_2015.csv"
 if (!file.exists(csv)) csv <- file.path("upload", csv)
 raw <- read.csv(csv)
@@ -98,14 +113,14 @@ names(tab) <- month.abb
 tableout(tab)
 ```
 
-```{r seasonal-spread, fig.height=3.0}
+```{r seasonal-spread, fig.height=2.4}
 style()
 boxplot(I(y/1e6) ~ month, data=train, names=month.abb,
         xlab="Calendar month", ylab="Sales (million firearms/month)",
         main="U.S. sales by calendar month, 2000-2014",
         col="#D8EBED", border=dark, outline=TRUE)
 points(12, train$y[train$date==as.Date("2012-12-01")]/1e6,
-       pch=1, cex=1.65, lwd=1.8, col=rust)
+       pch=1, cex=1.6, lwd=1.8, col=rust)
 ```
 
 The bolded line in each box is the median of that month's 15 training observations, and the box spans the middle half of the values. The red ring marks December 2012. Comparing medians checks whether the seasonal gap persists when an extreme observation has little influence. The December median is `r fmt(median(train$y[train$month.num==12]))` firearms, compared to `r fmt(median(train$y[train$month.num==6]))` in June. These summaries mix early and late years, so we estimate the calendar effect while also accounting for the time trend in Question 4.
@@ -141,7 +156,7 @@ $$\widehat Y_t=461{,}145+3{,}668.15t+\widehat\gamma_{m(t)},\quad \widehat\gamma_
 
 where $t=1$ in January 2000. With the month effect held fixed, the fitted baseline grows by 3,668 estimated firearms per month, or about 44,018 per year. After controlling for time, December is +436,980 firearms above January. December is also 11 months after January in the same year, so the within-year gap is $436{,}980+11(3{,}668.15)\approx477{,}330$ estimated firearms.
 
-```{r residual-comparison, fig.height=3.25}
+```{r residual-comparison, fig.height=2.4}
 style()
 plot(train$date, r/1000, type="l", lwd=1.2, col=teal,
      main="U.S. sales residuals after linear trend and month adjustment",
@@ -189,7 +204,7 @@ The joint test strongly rejects independence at the 5% level ($Q=402.91$, 24 df)
 
 A weakly stationary process has finite second moments, a constant mean, a covariance $\operatorname{Cov}(R_t,R_{t+h})=\gamma(h)$ depending only on lag $h$, and a constant variance $\gamma(0)$ (course notes, Chapters 1–2). The linear residual series in Question 4 varies around zero without the original upward drift. However, multi-year runs of errors with the same sign and larger late fluctuations raise slight doubts about a constant mean and variance, indicating that while a good portion of trend and seasonality has been eliminated reasonably well, it has not completed been removed. A correlation at lag 12 is compatible with weak stationarity if it recurs with the same strength over time.
 
-```{r correlations, fig.height=2.55}
+```{r correlations, fig.height=2.4}
 corplot <- function(x, partial=FALSE, title="", L=24) {
   values <- if (partial) as.numeric(pacf(x,lag.max=L,plot=FALSE)$acf) else
     as.numeric(acf(x,lag.max=L,plot=FALSE)$acf)[-1]
@@ -200,7 +215,7 @@ corplot <- function(x, partial=FALSE, title="", L=24) {
   abline(h=c(-1,1)*1.96/sqrt(length(x)),col=rust,lty=2)
 }
 style()
-par(mfrow=c(1,2), mar=c(3.3,3.8,1.5,.8))
+par(mfrow=c(1,2), mar=c(3,3.6,1.4,.5), mgp=c(1.9,.55,0))
 corplot(r,title="Training residual ACF",L=36)
 corplot(r,TRUE,"Training residual PACF",36)
 ```
@@ -249,9 +264,9 @@ Innovation variance is the spread of the one-step forecast errors. The innovatio
 
 The diagnostic series is each model's one-step prediction errors (innovations). A good fit should remove the short-lag dependence seen in Question 5. The panels show the innovation ACFs on a common scale with approximate 95% pointwise white-noise guides.
 
-```{r diagnostic-acfs, fig.height=2.1}
+```{r diagnostic-acfs, fig.height=2}
 style()
-par(mfrow=c(1,3),mar=c(3.3,3.5,1.5,.7),mgp=c(2,.52,0))
+par(mfrow=c(1,3), mar=c(3,3.3,1.4,.4), mgp=c(1.9,.5,0))
 for (name in names(models)) {
   e <- as.numeric(resid(models[[name]]))
   a <- as.numeric(acf(e,lag.max=24,plot=FALSE)$acf)[-1]
@@ -304,7 +319,7 @@ scores <- function(f) {
 Using $T=180$ for December 2014 as the forecast origin, the two forecasting rules over horizons $h=1,\ldots,12$ are$$\widehat Y_{T+h\mid T}=\widehat\beta_0+\widehat\beta_1(T+h)+\widehat\gamma_{m(T+h)}+\widehat X_{T+h\mid T}, \qquad \widehat Y^{\rm benchmark}_{T+h\mid T}=Y_{T+h-12}.$$
 The full model combines the projected linear trend and calendar-month effect at $t=180+h$ with the ARMA residual forecast, which shrinks toward zero by a factor of roughly $0.767$ per month after the first step since future innovations are forecast as zero. By contrast, the seasonal naive benchmark simply carries forward the observed sales from the corresponding month of 2014.
 
-```{r forecast-plot, fig.height=2.85}
+```{r forecast-plot, fig.height=2.4}
 style()
 curves <- cbind(test$y,forecast,benchmark)/1e6
 matplot(1:12,curves,type="o",pch=c(16,1,4),lty=c(1,2,3),lwd=1.6,
@@ -312,7 +327,7 @@ matplot(1:12,curves,type="o",pch=c(16,1,4),lty=c(1,2,3),lwd=1.6,
      main="2015 U.S. monthly sales: observations and forecasts")
 axis(1,1:12,month.abb)
 legend("topleft",c("Observed","Linear trend + ARMA","Same month of 2014"),
-       col=c(dark,teal,rust),lty=1:3,pch=c(16,1,4),bty="n",cex=.82)
+       col=c(dark,teal,rust),lty=1:3,pch=c(16,1,4),bty="n",cex=.7)
 ```
 
 For January, the deterministic component is `r fmt(as.numeric(predict(linear,newdata=test))[1])` and the predicted residual is `r fmt(residual.forecast[1])` estimated firearms, which add to `r fmt(forecast[1])`. By December, the residual contribution is only `r fmt(residual.forecast[12])`, so the persistence helps early in the year and then fades. The long-horizon forecast depends almost entirely on the extrapolated baseline and December's usual offset. The seasonal benchmark instead starts from the observed level of each 2014 month. Neither method updates with actual 2015 sales as they arrive.
@@ -323,8 +338,9 @@ For January, the deterministic component is `r fmt(as.numeric(predict(linear,new
 half <- function(i) data.frame(Month=month.abb[i],Observed=round(test$y[i]),
                                 Model=round(forecast[i]),Benchmark=round(benchmark[i]))
 monthly.results <- cbind(half(1:6), half(7:12))
-knitr::kable(monthly.results, format="latex", booktabs=TRUE, row.names=FALSE,
-             col.names=rep(c("Month","Observed","Model","Benchmark"),2))
+tab <- knitr::kable(monthly.results, format="latex", booktabs=TRUE, row.names=FALSE,
+                    linesep="", col.names=rep(c("Month","Observed","Model","Benchmark"),2))
+knitr::asis_output(paste0("\\begin{center}\\footnotesize\n", tab, "\n\\end{center}"))
 ```
 
 **Errors over all 12 months** (estimated firearms per month)
@@ -346,7 +362,7 @@ Furthermore, the model's extrapolated linear trend overshoots early 2015—predi
 
 Aisch and Keller (2016) identify May 2013 as the month Maryland approved new restrictions. For each Maryland month in 2012–2014, we applied the Question 1 weights to that state’s own checks. For example, September 2013 gives $1.1(38{,}055+9{,}912)+2(17)=52{,}797.7$ estimated firearms. The dotted line marks May approval, and the dashed line marks the October deadline discussed in the article. Plotting both dates lets us see whether the largest change coincided with approval or occurred in the months between.
 
-```{r maryland, fig.height=2.8}
+```{r maryland, fig.height=2.4}
 md <- subset(raw,state=="Maryland" & year>=2012 & year<=2014)
 md <- md[order(md$date),]
 style()
@@ -358,7 +374,7 @@ axis.Date(1,at=ticks,format="%b %Y")
 abline(v=as.Date("2013-05-01"),lty=3)
 abline(v=as.Date("2013-10-01"),lty=2,col=rust)
 legend("topleft", c("May approval","October deadline"),
-       lty=c(3,2), col=c("black",rust), bty="n", cex=.78)
+       lty=c(3,2), col=c("black",rust), bty="n", cex=.7)
 ```
 
 Estimated sales fell from 15,433 in May to 13,113 in July, then reached 52,798 in September before dropping to 21,381 in October. September was the last full month before the October deadline. The 2013 series stays at around 13,000 to 20,000 until the sharp jump in September 2013. August 2013 was 15,975, and after, the October sales drift back to normal. The timing is consistent with buyers moving purchases forward, but these monthly counts contain no information about individual buyers’ motives. Maryland alone supplies no estimate of what September sales would have been without the policy. Nationwide demand, seasonal buying, or shifts in the timing of purchases could also affect the series. We chose Maryland because the monthly approval date permits a before-and-after comparison within the event year, and the surrounding years also let us compare September with the same calendar month. Maryland's September estimates were 10,220 in 2012, 52,798 in 2013, and 7,813 in 2014. The 2013 peak was more than five times the previous September's level. That comparison helps distinguish an exceptional September from an ordinary recurring fall peak. However, this change cannot be automatically by interpreted as causal. The article says buyers rushed to beat the October deadline after the law passed. This is one plausible explanation for the jump, but the data alone cannot separate it from other causes. Other national factors, such as the surge after Sandy Hook in December 2012 and January 2013, also affect the 2013 series. There is no comparison group, and Maryland alone gives no estimate of September sales without the policy. Background checks are not completed sales, and national demand, seasonal buying, or shifts in purchase timing could also move the series.
